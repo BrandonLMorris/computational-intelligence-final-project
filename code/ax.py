@@ -11,19 +11,42 @@ except ImportError:
     print('ERROR: Cannot import cleverhans. Go to '
           'https://github.com/tensorflow/cleverhans to install')
     sys.exit(1)
-
+from cleverhans.utils_keras import KerasModelWrapper
+from cleverhans.attacks import FastGradientMethod
 
 MNIST_CLASSIFIER = 'mnist_classifier.hd5'
 
 
 def main():
-    dataset = _mnist_dataset()
-    classifier = _get_or_retrain_mnist_classifier()
-    print(f"Accuracy of {_get_acc(classifier, dataset['test_x']) * 100 :.2f}")
+    with tf.Session() as sess:
+        keras.backend.set_session(sess)
+        dataset = _mnist_dataset()
+        classifier = _get_or_retrain_mnist_classifier()
+        x = tf.placeholder(tf.float32, shape=(None, 28, 28, 1))
+        y = tf.placeholder(tf.float32, shape=(None, 10))
+        keras.backend.set_learning_phase(0)
+        fd = {
+            x: dataset['test_x'],
+            y: dataset['test_y']
+        }
+        acc = _get_acc(classifier(x), y).eval(feed_dict=fd) * 100
+        print(f'Baseline accuracy of {acc:.2f}')
+
+        # Now try FGSM
+        cleverhans_classifier = KerasModelWrapper(classifier)
+        fgsm = FastGradientMethod(cleverhans_classifier)
+        adv = fgsm.generate(x, clip_min=0., clip_max=1., eps=FLAGS.eps)
+        adv_acc = _get_acc(classifier(adv), y).eval(feed_dict=fd) * 100
+        print(f"FGSM accuracy of {adv_acc:.2f}")
 
 
-def _get_acc(model, inputs):
-    return model.evaluate(inputs, dataset['test_y'])[1]
+def _get_or_create_jsma():
+    pass
+
+
+def _get_acc(preds, y):
+    return tf.reduce_mean(tf.to_float(tf.equal(tf.argmax(y, axis=-1),
+                          tf.argmax(preds, axis=-1))))
 
 
 def _mnist_dataset():
