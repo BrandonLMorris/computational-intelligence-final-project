@@ -3,6 +3,8 @@ import sys
 
 import keras
 from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, Activation
+import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf
 
 try:
@@ -12,9 +14,10 @@ except ImportError:
           'https://github.com/tensorflow/cleverhans to install')
     sys.exit(1)
 from cleverhans.utils_keras import KerasModelWrapper
-from cleverhans.attacks import FastGradientMethod
+from cleverhans.attacks import FastGradientMethod, SaliencyMapMethod
 
 MNIST_CLASSIFIER = 'mnist_classifier.hd5'
+JSMA_AXS = 'jsma.npy'
 
 
 def main():
@@ -29,19 +32,32 @@ def main():
             x: dataset['test_x'],
             y: dataset['test_y']
         }
-        acc = _get_acc(classifier(x), y).eval(feed_dict=fd) * 100
-        print(f'Baseline accuracy of {acc:.2f}')
+        if FLAGS.baseline:
+            acc = _get_acc(classifier(x), y).eval(feed_dict=fd) * 100
+            print(f'Baseline accuracy of {acc:.2f}')
 
-        # Now try FGSM
         cleverhans_classifier = KerasModelWrapper(classifier)
-        fgsm = FastGradientMethod(cleverhans_classifier)
-        adv = fgsm.generate(x, clip_min=0., clip_max=1., eps=FLAGS.eps)
-        adv_acc = _get_acc(classifier(adv), y).eval(feed_dict=fd) * 100
-        print(f"FGSM accuracy of {adv_acc:.2f}")
+        # Now try FGSM
+        if FLAGS.fgsm:
+            fgsm = FastGradientMethod(cleverhans_classifier)
+            adv = fgsm.generate(x, clip_min=0., clip_max=1., eps=FLAGS.eps)
+            adv_acc = _get_acc(classifier(adv), y).eval(feed_dict=fd) * 100
+            print(f"FGSM accuracy of {adv_acc:.2f}")
+
+        if FLAGS.jsma:
+            j = _get_or_create_jsma(sess, x, cleverhans_classifier, dataset['test_x'][:2])
+            adv_acc = _get_acc(classifier(tf.convert_to_tensor(j)), y).eval(feed_dict=fd) * 100
+            print(f'JSMA accuracy of {adv_acc:.2f}')
 
 
-def _get_or_create_jsma():
-    pass
+def _get_or_create_jsma(sess, x, classifier, in_x):
+    if not os.path.exists(JSMA_AXS):
+        jsma = SaliencyMapMethod(classifier)
+        adv = jsma.generate(x, clip_min=0., clip_max=1., gamma=FLAGS.gamma)
+        adv_evaled = adv.eval(session=sess, feed_dict={x:in_x})
+        np.save(JSMA_AXS, adv_evaled)
+    else:
+        return np.load(JSMA_AXS)
 
 
 def _get_acc(preds, y):
@@ -110,6 +126,10 @@ if __name__ == '__main__':
     flags = tf.app.flags
     flags.DEFINE_boolean('retrain', False, 'retain models')
     flags.DEFINE_float('eps', 0.15, 'level of perturbation in FGSM')
+    flags.DEFINE_float('gamma', 0.1, 'level of perturbation in JSMA')
+    flags.DEFINE_boolean('fgsm', False, 'run fgsm calculations')
+    flags.DEFINE_boolean('baseline', False, 'run baseline calculations')
+    flags.DEFINE_boolean('jsma', False, 'run jsma calculations')
     FLAGS = flags.FLAGS
     dataset = _mnist_dataset()
     main()
