@@ -36,12 +36,12 @@ As we have seen throughout the semester, machine learning systems can operate
 effectively under normal conditions, but can be thwarted by adversaries who
 exploit characteristics of the system. For our final project we develop, attack,
 defend, and analyze a machine learning system utilizing the skills cultivated
-during the class. Specifically, we chose to examine adversarial machine learning
+during class. Specifically, we chose to examine adversarial machine learning
 within the particular context of deep learning, where deep neural networks are
 used to automatically solve a variety of complex tasks~\cite{lecun2015deep}.
 We examine several attack and defenses for a convolutional neural
 network~\cite{goodfellow2016deep} trained to classify images of handwritten
-digits from the MNIST dataset~\cite{lecun1998mnist}.
+digits from the MNIST data set~\cite{lecun1998mnist}.
 
 \subsection{Deep Learning}
 
@@ -70,7 +70,7 @@ a machine learning algorithm. Studies have shown that minute, expertly crafted
 perturbations to otherwise correctly-handled input could lead to wildly
 incorrect outputs~\cite{szegedy2013intriguing}. This malicious inputs are
 typically known as \textit{adversarial examples}, and are consistently found
-within deep learning. An sample of an adversarial example can be seen in
+within deep learning. An adversarial example can be seen in
 Figure~\ref{fig:ax-example}. Even machine learning algorithms that do not utilize deep
 neural networks are susceptible to adversarial
 examples~\cite{papernot2016transferability}.
@@ -88,11 +88,11 @@ image with high confidence.}
 
 There are numerous ways to craft adversarial
 examples~\cite{szegedy2013intriguing,goodfellow2014explaining,nguyen2015deep,papernot2016limitations,carlini2017towards},
-we will only experiment with two such attacks. Both of these attacks are
+but we will only experiment with two such attacks. Both of these attacks are
 described in greater detail in the next section, and both rely on the
 \textit{gradient} of the neural network (which is essential during training) to
 exploit the classifier by finding minute perturbations that create a maximal
-different in the output.
+difference in the output.
 
 As demonstrated in our experiments (Experiments section), both of these
 attacks have a severe impact on the performance of our otherwise performant
@@ -157,7 +157,7 @@ classifies this kinds of images.}%
 
 \subsection{Attack 2: Jacobian Saliency Map Algorithm}
 
-The second attack we utilize is called the Jacobian Saliency Math Algorithm
+The second attack we utilize is called the Jacobian Saliency Map Algorithm
 (JSMA), and was first introduced in~\cite{papernot2016limitations}. Similar to
 FGSM, the JSMA algorithm utilizes the gradient of the network with respect to
 the input to calculate perturbations. However, JSMA utilizes a ``forward
@@ -184,7 +184,7 @@ images that have been modified by JSMA look like.
 The first defensive strategy we investigate for this project is known as
 \textit{adversarial training}~\cite{goodfellow2014explaining}. This defense
 involves crafting adversarial examples, then incorporating those new inputs into
-the dataset. The idea is that adversarial examples exist outside the
+the data set. The idea is that adversarial examples exist outside the
 distribution of normal inputs, so a model only trained on normal inputs will
 have great difficulty properly handling adversarial examples. By augmenting the
 data set to include adversarial inputs, the model has a chance of appropriately
@@ -223,7 +223,118 @@ another example that explicitly used denoising autoencoders in this way.
 
 \section{Experiments}
 
+Our experimentation involved training a convolutional deep neural network,
+attacking it with the previously described algorithms, then employing our
+defensive mechanisms and observing their effectiveness. As mentioned int eh
+Methodology section, we implemented our experiments in Python, utilizing the
+TensorFlow~\cite{abadi2016tensorflow}, Keras~\cite{chollet2015keras}, and
+Cleverhans~\cite{goodfellow2016cleverhans} libraries.
+
+The architecture utilized for our convolutional neural network classifier is as
+follows. The network consists of five layers, the first two convolutional and
+the last three fully connected. The first convolutional layer consists of 32
+filters of 5x5 size, with a stride of one and enough pooling such that the width
+and height remained equal. The second convolutional layer is identical, except
+having 64 filters. Both convolutional layers are followed by a 2x2 max pooling,
+similarly padded. The fully connected layers have 1024, 256, and 10 units
+respectively. We used the rectified linear unit (ReLU) as our activation
+function for the fully connected layers, except for the last layer which uses
+softmax to transform the outputs into a probability distribution. We also
+employ dropout~\cite{srivastava2014dropout} on our fully connected layers for
+regularization, with the dropout mask probability set to 0.5 during training.
+For each instance of training, we used the Adadelta
+optimizer~\cite{zeiler2012adadelta}, categorical cross-entropy as our loss
+function, and trained for seven iterations over the training set with a
+minibatch size of 50.
+
+The denoising autoencoder utilized during experimentation consists of 4
+convolutional layers: 2 for encoding and 2 for decoding. Each layer is followed
+by max pooling or up-sampling for encoding and decoding, respectively. The ReLU
+activation function is utilized at every layer except the last, which utilizes
+the sigmoid function to produce outputs between [0.0, 1.0]. Every convolutional
+layer consisted of 32 filters of size 3x3, with padding to maintain height and
+width (the last layer has only a single filter). A standard normally distributed
+noise was added to the inputs, and scaled by a factor of 0.5. The Adadelta
+optimizer~\cite{zeiler2012adadelta} is again used for training, with binary
+cross-entropy as our loss function. The model was trained for 100 iterations
+over the training input, with a minibatch size of 128.
+
+Unless otherwise specified, FGSM adversarial examples were always crafted with
+$\epsilon=0.15$. For JSMA adversarial examples, no more than 10\% of the input
+space was permitted to be perturbed.
+
 \section{Results}
+
+We now present some of the results of our experimentation for both our attacks
+and defenses. A summary of the results can be found in
+Table~\ref{table:results}.
+
+\begin{table}
+  \begin{center}
+    \begin{tabular}{| c | c | c |}
+      \hline
+      Attack & Defense & Accuracy\\
+      \hline
+      None & None & 97.39\%\\
+      \hline
+      FGSM & None & 42.47\%\\
+      \hline
+      JSMA & None & 4.37\%\\
+      \hline
+      None & FGSM Training & 98.45\%\\
+      \hline
+      FGSM & FGSM Training & 98.25\%\\
+      \hline
+      None & JSMA Training & 98.58\%\\
+      \hline
+      JSMA & JSMA Training & 4.36\%\\
+      \hline
+      None & DAE & 96.96\%\\
+      \hline
+      FGSM & DAE & 89.33\%\\
+      \hline
+      JSMA & DAE & 63.42\%\\
+      \hline
+    \end{tabular}
+  \end{center}
+  \caption{A summary of our results from attacking and defending our
+  convolutional neural network.}%
+  \label{table:results}
+\end{table}
+
+The baseline classifier received a test set accuracy of 97.39\%. When FGSM was
+employed, that accuracy dropped to 42.67\%. Similarly, JSMA caused the accuracy
+of the classifier to drop to a measly 4.37\%.
+
+Adversarial training (retraining a classifier with an augmented training set
+that included adversarial examples) yielded a significant improvement for FGSM
+adversarial examples, but was less effective to preventing the JSMA attack.
+After retraining with FGSM adversarial examples, the new classifier had a
+(non-adversarial) test set accuracy of 98.45\%. Note that this is even higher to
+the baseline classifier, which is likely due to the effective doubling of the
+training set size. For FGSM adversarial examples, the FGSM-trained classifier's
+accuracy almost did not change: 98.25\%.
+
+After training a classifier with JSMA-crafted adversarial inputs, the new
+classifier had a (non-adversarial) test set accuracy of 98.58\%, which is again
+an improvement over the baseline. However, crafting JSMA inputs on the new
+classifier yielded an accuracy of only 4.36\%, which is almost identical to the
+baseline's accuracy to JSMA examples. We believe that this comes from JSMA's
+ability to exploit the network by analyzing the gradient, which circumvents
+adversarial training. That is, JSMA is able to create out-of-distribution
+samples specific to the network, be that network adversarially or normally
+trained. We do note, however, that reusing the JSMA examples crafted for the
+\textit{baseline} network yielded an accuracy of 95.95\% on the JSMA-trained
+classifier.
+
+Utilizing the DAE also improved the neural network's accuracy to adversarial
+examples. On normal inputs, preprocessing the input with our DAE only slightly
+dropped the test set accuracy to 96.95\%. For FGSM inputs, the DAE was able to
+give the baseline classifier an accuracy of 89.33\%, which suggests it was quite
+effective at filtering out adversarial noise. Finally, the preprocessing via DAE
+yielded a 63.42\% accuracy for JSMA inputs, which is still impressive
+considering the Guassian noise the DAE was trained with is very different than
+the concentrated noise produced by JSMA.
 
 % Baseline:       97.39
 % FGSM:           42.47
@@ -240,6 +351,9 @@ another example that explicitly used denoising autoencoders in this way.
 % FGSM+JSMA       63.42
 
 \section{Breakdown of Work}
+
+The code utilized in the experiments was developed by Brandon Morris. This
+report was compiled by Brandon Morris.
 
 %\bibliographystyle{aaai}
 \bibliographystyle{plain}
