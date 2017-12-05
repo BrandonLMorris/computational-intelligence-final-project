@@ -4,7 +4,7 @@ import sys
 import keras
 from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, Activation, UpSampling2D
 from keras.models import Model
-import matplotlib.pyplot as plt
+from matplotlib import pyplot
 import numpy as np
 import tensorflow as tf
 
@@ -95,6 +95,34 @@ def main():
             print(f'Denoised normal accuracy: {dae_acc :.2f}')
             print(f'Denoised FGSM accuracy: {dae_fgsm_acc :.2f}')
             print(f'Denoised JSMA accuracy: {dae_jsma_acc :.2f}')
+        if FLAGS.images:
+            # Some normal MNIST images
+            idx = np.random.randint(0, len(dataset['test_x']), size=2)
+            pyplot.subplot(1,2,1)
+            pyplot.imshow(dataset['test_x'][idx[0]].squeeze(), cmap='gray')
+            pyplot.subplot(1,2,2)
+            pyplot.imshow(dataset['test_x'][idx[1]].squeeze(), cmap='gray')
+            pyplot.savefig('normal.png')
+            pyplot.clf()
+            # Some FGSM images
+            cleverhans_classifier = KerasModelWrapper(classifier)
+            fgsm = FastGradientMethod(cleverhans_classifier)
+            axs = fgsm.generate(x, clip_min=0., clip_max=1., eps=FLAGS.eps).eval(feed_dict=fd)
+            pyplot.subplot(1,2,1)
+            pyplot.imshow(axs[idx[0]].squeeze(), cmap='gray')
+            pyplot.subplot(1,2,2)
+            pyplot.imshow(axs[idx[1]].squeeze(), cmap='gray')
+            pyplot.savefig('fgsm.png')
+            pyplot.clf()
+            # Some JSMA images
+            jsma = _get_or_create_jsma(sess, x, cleverhans_classifier, dataset['test_x'], JSMA_AXS)
+            pyplot.subplot(1,2,1)
+            pyplot.imshow(jsma[idx[0]].squeeze(), cmap='gray')
+            pyplot.subplot(1,2,2)
+            pyplot.imshow(jsma[idx[1]].squeeze(), cmap='gray')
+            pyplot.savefig('jsma.png')
+            pyplot.clf()
+
 
 
 def _get_or_create_jsma(sess, x, classifier, in_x, save_file):
@@ -223,6 +251,7 @@ if __name__ == '__main__':
     flags.DEFINE_boolean('baseline', False, 'run baseline calculations')
     flags.DEFINE_boolean('jsma', False, 'run jsma calculations')
     flags.DEFINE_boolean('dae', False, 'run dae calculations')
+    flags.DEFINE_boolean('images', False, 'save images of the inputs')
     FLAGS = flags.FLAGS
     dataset = _mnist_dataset()
     main()
